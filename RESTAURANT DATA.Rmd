@@ -1,0 +1,175 @@
+---
+title: "RESTAURANT DATA ANALYSIS -MONGODB"
+output:
+  
+    html_document:
+    df_print: paged
+runtime: shiny
+---
+
+<br>
+
+<p><h4><b>The data has been gathered from ZOMATO,a popular indian food delivery and restaurant aggregator.</b></h4></p>
+
+>The below python script connects to the zomato API and loads upto a 100 restaurants details into the database at random.
+
+```python
+from pymongo import MongoClient
+import requests
+import random
+
+
+client = MongoClient('mongodb+srv://admin:start123@cluster0.ss0ry.mongodb.net/test')
+db=client['ZOMATO']
+collection = db['RESTAURANT_INFO']
+
+headers={"user_key": "78cf9c97da52bc00fb3733e09d50aa96", "Accept": "application/json"}  
+id_list=random.sample(range(0,10000 ), 100)
+
+for val in id_list:
+    response = requests.get('https://developers.zomato.com/api/v2.1/restaurant?res_id='+str(val),headers=headers)
+    if response.status_code == 200:
+        collection.insert_one(response.json()).inserted_id
+```
+<br>
+<p><h4><b>MongoDB is a document-oriented NoSQL database used for high volume data storage. Instead of using tables and rows as in the 
+traditional relational databases, MongoDB makes use of collections and documents. Documents consist of key-value pairs which are the basic unit of data in MongoDB. 
+Collections contain sets of documents and function which is the equivalent of relational database tables.</b></h4></p>
+
+>Here we are using Mongodb's cloud database platform ATLAS to
+store the details of various restaurants.Each restaurant is a separae document in the database.
+
+<br>
+<img src="atlas.png" width="900" height="380">
+
+<br>
+<br>
+<h5><b> Loading Libraries</b><h5>
+```{r message=FALSE, warning=FALSE}
+library(mongolite)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+library(leaflet)
+library(kableExtra)
+library(shiny)
+```
+
+<br>
+<h4><b>Connecting to the MONGODB CLOUD Database:</b></h4>
+```{r}
+Restaurants <- mongo("RESTAURANT_INFO",db='ZOMATO', url = "mongodb+srv://admin:start123@cluster0.ss0ry.mongodb.net/test")
+
+```
+<br>
+<h4><b>Current number of records:</b></h4>
+```{r}
+
+Restaurants$count('{}')
+
+```
+
+<br>
+
+<h4><b>Filtering relevant data:</b></h4>
+
+```{r}
+
+data <- Restaurants$find('{}')
+data_filter<-data%>%select(R,id, name,location,average_cost_for_two,price_range,cuisines,opentable_support,user_rating,has_online_delivery,include_bogo_offers,is_table_reservation_supported,establishment)
+
+```
+
+<br>
+
+<h4><b>We will include only those restaurants which have more than a 100 user ratings:</b></h4>
+
+
+```{r}
+
+#data_filter%>%filter(
+  data_filter<-data_filter%>%filter(data_filter$user_rating$votes>100)
+
+
+```
+
+<br>
+
+<h4><b>TYPE OF RESTAURANT VS USER_RATING</h4>
+```{r}
+
+frame1<-data.frame(as.data.frame(as.array(data_filter$establishment)),as.numeric(data_filter$user_rating$aggregate_rating))
+
+names(frame1)=c('RESTAURANT_TYPE','USER_RATING')
+frame1<-frame1%>%group_by(as.character(  RESTAURANT_TYPE))%>%summarise(avg_rating=round(mean(USER_RATING),1))%>%filter('as.character(RESTAURANT_TYPE)'!='character(0)')
+names(frame1)=c('RESTAURANT_TYPE','USER_RATING')
+
+frame1%>%ggplot(aes(x=RESTAURANT_TYPE,y=USER_RATING,fill=as.character(USER_RATING)))+geom_bar(stat = 'identity')+scale_fill_brewer(name = "Rating",palette = 'Reds')+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+```
+
+<br>
+<h4><b>AVERAGE_COST_FOR_TWO vs TYPE OF RESTAURANT</b></h4>
+```{r}
+frame2<-data.frame(as.data.frame(as.array(data_filter$establishment)),(data_filter$average_cost_for_two))
+names(frame2)=c('RESTAURANT_TYPE','AVERAGE_COST_FOR_TWO')
+
+frame2<-frame2%>%group_by(as.character(  RESTAURANT_TYPE))%>%summarise(avg_cost_for_2=round(mean(AVERAGE_COST_FOR_TWO),1))%>%filter('as.character(RESTAURANT_TYPE)'!='character(0)')
+names(frame2)=c('RESTAURANT_TYPE','AVERAGE_COST_FOR_TWO')
+
+frame2%>%ggplot(aes(x=RESTAURANT_TYPE,y=AVERAGE_COST_FOR_TWO,fill=as.character(AVERAGE_COST_FOR_TWO)))+geom_bar(stat = 'identity')+scale_fill_brewer(name = "AVG_COST",palette = 'Reds')+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+```
+
+
+
+<br>
+<h4><b>CUISINE VS USER_RATING</b></h4>
+```{r}
+frame3<-data.frame(str_match(data_filter$cuisines,'^\\w+ \\w+|^\\w+'),(data_filter$user_rating$aggregate_rating))%>%arrange(desc(data_filter$user_rating$aggregate_rating))
+
+names(frame3)=c('CUISINES','USER_RATING')
+
+ggplot(data=frame3[1:6,],aes(x=CUISINES,y=USER_RATING))+geom_bar(stat = 'identity',aes(fill=CUISINES))+
+
+scale_fill_brewer(palette = 'Reds')+theme_bw()
+
+```
+
+
+<br>
+<h4><b>DOES HAVING ONLINE_DELIVERY IMPROVE USER_RATING</b></h4>
+```{r}
+frame4<-data.frame(data_filter$has_online_delivery,as.integer(data_filter$user_rating$aggregate_rating))
+
+
+names(frame4)=c('ONLINE_DELIVERY','USER_RATING')
+
+frame4<-frame4%>%group_by(as.character(ONLINE_DELIVERY))%>%summarise(avg_rating=mean(USER_RATING))
+names(frame4)=c('ONLINE_DELIVERY','USER_RATING')
+
+(frame4)%>%kbl()%>%kable_material_dark(c('striped','hover'))
+```
+
+<br>
+<h4><b>PRICE_RANGE VS USER_RATING</b></h4>
+```{r}
+frame5<-data.frame(data_filter$price_range,as.integer(data_filter$user_rating$aggregate_rating))
+
+names(frame5)=c('PRICE_RANGE','USER_RATING')
+
+frame5<-frame5%>%group_by(as.character(PRICE_RANGE))%>%summarise(avg_rating=mean(USER_RATING))
+names(frame5)=c('PRICE_RANGE','USER_RATING')
+
+(frame5)%>%kbl()%>%kable_material_dark(c('striped','hover'))
+```
+
+
+<br>
+<h4><b>WHERE ARE THE HIGHEST RATED RESTAURANTS LOCATED</b></h4>
+```{r}
+frame6<-data.frame(as.numeric(data_filter$location$latitude),as.numeric(data_filter$location$longitude),as.integer(data_filter$user_rating$aggregate_rating))
+names(frame6)=c('lat','lon','USER_RATING')
+
+ leaflet(data = frame6[1:20,]) %>%addTiles()%>%addCircleMarkers(~lon, ~lat)
+```
