@@ -3,7 +3,7 @@ title: "RESTAURANT DATA ANALYSIS -MONGODB"
 output:
   
     html_document:
-    df_print: paged
+   
 runtime: shiny
 ---
 
@@ -32,15 +32,58 @@ for val in id_list:
         collection.insert_one(response.json()).inserted_id
 ```
 <br>
+
+<p><h4><b>The API returns the details of each restaurant as a JSON (Javascript Object Notation) document,which we then store in mongodb</b></h4></p>
+
+```
+{
+  "id": "16774318",
+  "name": "Otto Enoteca & Pizzeria",
+  "url": "https://www.zomato.com/new-york-city/otto-enoteca-pizzeria-greenwich-village",
+  "location": {
+    "address": "1 5th Avenue, New York, NY 10003",
+    "locality": "Greenwich Village",
+    "city": "New York City",
+    "latitude": "40.732013",
+    "longitude": "-73.996155",
+    "zipcode": "10003",
+    "country_id": "216"
+  },
+  "average_cost_for_two": "60",
+  "price_range": "2",
+  "currency": "$",
+  "thumb": "https://b.zmtcdn.com/data/pictures/chains/8/16774318/a54deb9e4dbb79dd7c8091b30c642077_featured_thumb.png",
+  "featured_image": "https://d.zmtcdn.com/data/pictures/chains/8/16774318/a54deb9e4dbb79dd7c8091b30c642077_featured_v2.png",
+  "photos_url": "https://www.zomato.com/new-york-city/otto-enoteca-pizzeria-greenwich-village/photos#tabtop",
+  "menu_url": "https://www.zomato.com/new-york-city/otto-enoteca-pizzeria-greenwich-village/menu#tabtop",
+  "events_url": "https://www.zomato.com/new-york-city/otto-enoteca-pizzeria-greenwich-village/events#tabtop",
+  "user_rating": {
+    "aggregate_rating": "3.7",
+    "rating_text": "Very Good",
+    "rating_color": "5BA829",
+    "votes": "1046"
+  },
+  "has_online_delivery": "0",
+  "is_delivering_now": "0",
+  "has_table_booking": "0",
+  "deeplink": "zomato://r/16774318",
+  "cuisines": "Cafe",
+  "all_reviews_count": "15",
+  "photo_count": "18",
+  "phone_numbers": "(212) 228-2930",
+  
+```
+
+
+<br>
+
 <p><h4><b>MongoDB is a document-oriented NoSQL database used for high volume data storage. Instead of using tables and rows as in the 
 traditional relational databases, MongoDB makes use of collections and documents. Documents consist of key-value pairs which are the basic unit of data in MongoDB. 
 Collections contain sets of documents and function which is the equivalent of relational database tables.</b></h4></p>
 
->Here we are using Mongodb's cloud database platform ATLAS to
+>Here we are using Mongodb's cloud database platform 
+<a href="https://www.mongodb.com/cloud/atlas"> ATLAS</a> to
 store the details of various restaurants.Each restaurant is a separae document in the database.
-
-<br>
-<img src="atlas.png" width="900" height="380">
 
 <br>
 <br>
@@ -88,7 +131,7 @@ data_filter<-data%>%select(R,id, name,location,average_cost_for_two,price_range,
 
 ```{r}
 
-#data_filter%>%filter(
+
   data_filter<-data_filter%>%filter(data_filter$user_rating$votes>100)
 
 
@@ -168,8 +211,31 @@ names(frame5)=c('PRICE_RANGE','USER_RATING')
 <br>
 <h4><b>WHERE ARE THE HIGHEST RATED RESTAURANTS LOCATED</b></h4>
 ```{r}
-frame6<-data.frame(as.numeric(data_filter$location$latitude),as.numeric(data_filter$location$longitude),as.integer(data_filter$user_rating$aggregate_rating))
+frame6<-data.frame(as.numeric(data_filter$location$latitude),as.numeric(data_filter$location$longitude),as.numeric(data_filter$user_rating$aggregate_rating))
 names(frame6)=c('lat','lon','USER_RATING')
 
- leaflet(data = frame6[1:20,]) %>%addTiles()%>%addCircleMarkers(~lon, ~lat)
+
+getColor <- function(frame6) {
+  sapply(frame6$USER_RATING, function(USERRATING) {
+  if(USERRATING > 4) {
+    "green"
+  } else if(USERRATING >=2&USERRATING <=4) {
+    "orange"
+  } else {
+    "red"
+  } })
+}
+
+
+icons <- awesomeIcons(
+  icon = 'glyphicon glyphicon-glass',
+  iconColor = 'black',
+  library = 'glyphicon',
+  markerColor = getColor(frame6)
+)
+
+ leaflet(data = frame6) %>%addTiles()%>%addAwesomeMarkers(~lon, ~lat,icon=icons,label = ~USER_RATING)
 ```
+
+
+
