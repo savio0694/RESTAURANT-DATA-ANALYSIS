@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/800188/5e2b61576ddb4b3f8a90925292df97f3
+bundleId: https://api.rpubs.com/api/v1/document/800188/5e2b61576ddb4b3f8a90925292df97f3
+url: http://rpubs.com/leander/800188
+when: 1629291532.41943

@@ -1,37 +1,20 @@
 ---
-title: "RESTAURANT DATA ANALYSIS -MONGODB"
+title: "RESTAURANT DATA MINING -MONGODB"
+author : 'Leander Leitao'
 output:
-  
-    html_document:
-   
-runtime: shiny
+  prettydoc::html_pretty:
+    theme: tactile
+    
 ---
+
+<img src="https://entrackr.com/wp-content/uploads/2019/02/zomato.jpg">
 
 <br>
 
 <p><h4><b>The data has been gathered from ZOMATO,a popular indian food delivery and restaurant aggregator.</b></h4></p>
 
->The below python script connects to the zomato API and loads upto a 100 restaurants details into the database at random.
-
-```python
-from pymongo import MongoClient
-import requests
-import random
-
-
-client = MongoClient('mongodb+srv://admin:start123@cluster0.ss0ry.mongodb.net/test')
-db=client['ZOMATO']
-collection = db['RESTAURANT_INFO']
-
-headers={"user_key": "78cf9c97da52bc00fb3733e09d50aa96", "Accept": "application/json"}  
-id_list=random.sample(range(0,10000 ), 100)
-
-for val in id_list:
-    response = requests.get('https://developers.zomato.com/api/v2.1/restaurant?res_id='+str(val),headers=headers)
-    if response.status_code == 200:
-        collection.insert_one(response.json()).inserted_id
-```
 <br>
+<p><h4>Taking into account  the unstructured nature of the data and possibly changing schema, mongodb is a great fit as a datastore. As it can scale horizontally growth of data volume is not a limiting factor</h4></p>
 
 <p><h4><b>The API returns the details of each restaurant as a JSON (Javascript Object Notation) document,which we then store in mongodb</b></h4></p>
 
@@ -81,161 +64,206 @@ for val in id_list:
 traditional relational databases, MongoDB makes use of collections and documents. Documents consist of key-value pairs which are the basic unit of data in MongoDB. 
 Collections contain sets of documents and function which is the equivalent of relational database tables.</b></h4></p>
 
->Here we are using Mongodb's cloud database platform 
+>I have used Mongodb's cloud database platform 
 <a href="https://www.mongodb.com/cloud/atlas"> ATLAS</a> to
 store the details of various restaurants.Each restaurant is a separae document in the database.
 
+<div>
+<img src="https://miro.medium.com/max/1250/1*dd1_V4HSmaSnPoTNH10bpg.jpeg">
+</div>
 <br>
 <br>
-<h5><b> Loading Libraries</b><h5>
-```{r message=FALSE, warning=FALSE}
-library(mongolite)
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-library(stringr)
-library(leaflet)
-library(kableExtra)
-library(shiny)
-```
+
+
 
 <br>
 <h4><b>Connecting to the MONGODB CLOUD Database:</b></h4>
-```{r}
-Restaurants <- mongo("RESTAURANT_INFO",db='ZOMATO', url = "mongodb+srv://admin:start123@cluster0.ss0ry.mongodb.net/test")
-
 ```
-<br>
-<h4><b>Current number of records:</b></h4>
-```{r}
-
-Restaurants$count('{}')
-
-```
-
-<br>
-
-<h4><b>Filtering relevant data:</b></h4>
-
-```{r}
-
-data <- Restaurants$find('{}')
-data_filter<-data%>%select(R,id, name,location,average_cost_for_two,price_range,cuisines,opentable_support,user_rating,has_online_delivery,include_bogo_offers,is_table_reservation_supported,establishment)
-
-```
-
-<br>
-
-<h4><b>We will include only those restaurants which have more than a 100 user ratings:</b></h4>
+from pymongo import MongoClient
+import requests
+import random
+import configparser
+import csv
+from google.cloud import storage;
+import os
+import json
+from bson import json_util
+from bson.json_util import dumps
+from google.cloud import bigquery
 
 
-```{r}
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = 'zomatoproject-b09246d74291.json'
+parser = configparser.ConfigParser() 
+parser.read("pipeline.conf") 
+hostname = parser.get("mongo_config", "hostname")
+username = parser.get("mongo_config", "username") 
+password = parser.get("mongo_config", "password") 
+database_name = parser.get("mongo_config", "database") 
+collection_name = parser.get("mongo_config", "collection")
+mongo_client = MongoClient( "mongodb+srv://" + username + ":" + password + "@" + hostname + "/" +database_name+ "?authSource=admin&replicaSet=atlas-9b62sm-shard-0&readPreference=primary&appname=MongoDB%20Compass&ssl=true" )
 
+mongo_db = mongo_client['ZOMATO']
 
-  data_filter<-data_filter%>%filter(data_filter$user_rating$votes>100)
+mongo_collection = mongo_db[collection_name]
 
+mongo_query = {"price_range" : { "$gte": 0 } }
 
+restaurants = mongo_collection.find(mongo_query, batch_size=300)
 ```
 
 <br>
+<h4><b>Extracting relevant data from the bson documents and storing the extracted data as a csv file on GOOGLE CLOUD STORAGE</b></h4>
 
-<h4><b>TYPE OF RESTAURANT VS USER_RATING</h4>
-```{r}
-
-frame1<-data.frame(as.data.frame(as.array(data_filter$establishment)),as.numeric(data_filter$user_rating$aggregate_rating))
-
-names(frame1)=c('RESTAURANT_TYPE','USER_RATING')
-frame1<-frame1%>%group_by(as.character(  RESTAURANT_TYPE))%>%summarise(avg_rating=round(mean(USER_RATING),1))%>%filter('as.character(RESTAURANT_TYPE)'!='character(0)')
-names(frame1)=c('RESTAURANT_TYPE','USER_RATING')
-
-frame1%>%ggplot(aes(x=RESTAURANT_TYPE,y=USER_RATING,fill=as.character(USER_RATING)))+geom_bar(stat = 'identity')+scale_fill_brewer(name = "Rating",palette = 'Reds')+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
-
-```
+<img src="https://www.thesmbguide.com/images/Google-Cloud-Storage-Reviews-1024x512-20200419.png">
 
 <br>
-<h4><b>AVERAGE_COST_FOR_TWO vs TYPE OF RESTAURANT</b></h4>
-```{r}
-frame2<-data.frame(as.data.frame(as.array(data_filter$establishment)),(data_filter$average_cost_for_two))
-names(frame2)=c('RESTAURANT_TYPE','AVERAGE_COST_FOR_TWO')
 
-frame2<-frame2%>%group_by(as.character(  RESTAURANT_TYPE))%>%summarise(avg_cost_for_2=round(mean(AVERAGE_COST_FOR_TWO),1))%>%filter('as.character(RESTAURANT_TYPE)'!='character(0)')
-names(frame2)=c('RESTAURANT_TYPE','AVERAGE_COST_FOR_TWO')
+>Google Cloud Storage is a RESTful online file storage web service for storing and accessing data on Google Cloud Platform infrastructure.
 
-frame2%>%ggplot(aes(x=RESTAURANT_TYPE,y=AVERAGE_COST_FOR_TWO,fill=as.character(AVERAGE_COST_FOR_TWO)))+geom_bar(stat = 'identity')+scale_fill_brewer(name = "AVG_COST",palette = 'Reds')+theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+<br>
+
 ```
+def json_to_gcp():
+    storage_client = storage.Client()
+    bucket = storage_client.bucket('restaurantdata0694')
+    blob = bucket.blob('data.json')
+
+    data=json.loads(blob.download_as_string())
+    all_restaurants=[]
+
+    for restaurant in data:
+        id=str(restaurant.get("id"))
+        price_range=str(restaurant.get("price_range"))
+        average_cost_for2=str(restaurant.get("average_cost_for_two"))
+        city=str(restaurant.get("location",{}).get("city"))
+        user_rating=str(restaurant.get('user_rating',{}).get('aggregate_rating'))
+        latitude= str(restaurant.get("location",{}).get('latitude'))
+        longitude=str(restaurant.get("location",{}).get('longitude'))
+        online_delivery=str(restaurant.get("has_online_delivery"))
+        cuisine=str((restaurant.get("cuisines")).split(",")[0])
+
+        if(len(restaurant.get("establishment"))>=1):
+            establishment=str(restaurant.get('establishment')[0])
+        else:
+            establishment='0'
+
+        
+        
+        hotel=[]
+        hotel.append((id))
+        hotel.append(price_range)
+        hotel.append(average_cost_for2)
+        hotel.append(city)
+        hotel.append(user_rating)
+        hotel.append(latitude)
+        hotel.append(longitude)
+        hotel.append(online_delivery)
+        hotel.append(cuisine)
+        hotel.append(establishment)
+
+
+        all_restaurants.append(hotel)
+    
+    export_file= "Restaurants_info.csv"
+    with open(export_file, 'w',newline='') as restaurant_file: 
+        csv_write = csv.writer(restaurant_file, delimiter=',') 
+        csv_write.writerows(all_restaurants) 
+        restaurant_file.close()
+    
+    storage_client = storage.Client()
+
+    bucket = storage_client.bucket('restaurantdata0694')
+    blob = bucket.blob('restaurantdata0694.csv')
+
+    blob.upload_from_filename('Restaurants_info.csv')
+
+```
+
+
+<br>
+
+<h4><b>Everytime a file is uploaded to cloud storage we need a mechanism
+by which we can load it into our data warehouse,in this case googles bigquery. While there are numerous ways to achive this, I've used google cloud functions as it allows us to sense when a new file is uploaded to clous storage and immediately triggers the load job.</b></h4>
+
+<br>
+<img src="https://miro.medium.com/max/1400/1*n-CtJdmyP99Vtq5oG-iV4g.png">
+
+>Google Cloud Functions is a serverless execution environment for building and connecting cloud services. With Cloud Functions you write simple, single-purpose functions that are attached to events emitted from your cloud infrastructure and services.
+
+```
+def warehouse_load():
+    client = bigquery.Client()
+
+
+
+    job_config = bigquery.LoadJobConfig(
+    schema=[
+        bigquery.SchemaField("id", "INTEGER","NULLABLE"),
+        bigquery.SchemaField("price_range", "INTEGER","NULLABLE"),
+        bigquery.SchemaField("average_cost_for2", "INTEGER","NULLABLE"),
+        bigquery.SchemaField("city", "STRING","NULLABLE"),
+        bigquery.SchemaField("user_rating", "FLOAT","NULLABLE"),
+        bigquery.SchemaField("latitude", "FLOAT","NULLABLE"),
+        bigquery.SchemaField("longitude", "FLOAT","NULLABLE"),
+        bigquery.SchemaField("online_delivery", "INTEGER","NULLABLE"),
+        bigquery.SchemaField("cuisine", "STRING","NULLABLE"),
+        bigquery.SchemaField("establishment", "STRING","NULLABLE"),
+    ],
+    skip_leading_rows=1,
+    
+    source_format=bigquery.SourceFormat.CSV,
+    )
+    uri = "https://storage.cloud.google.com/restaurantdata0694/restaurantdata0694.csv"
+    table_id= "zomatoproject.restaurant_data.restaurant_data1"
+
+    load_job = client.load_table_from_uri(
+    uri, table_id, job_config=job_config
+    )  
+
+    load_job.result()  # Waits for the job to complete.
+
+    destination_table = client.get_table(table_id)  
+    print("Loaded {} rows.".format(destination_table.num_rows))
+    
+    warehouse_load()
+    
+    
+```
+
+
+<img src="https://miro.medium.com/max/1000/0*eDEy4S8zFfYnRt1X.png">
+
+
+>BigQuery is a fully-managed, serverless data warehouse that enables scalable analysis over petabytes of data. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 <br>
 <h4><b>CUISINE VS USER_RATING</b></h4>
-```{r}
-frame3<-data.frame(str_match(data_filter$cuisines,'^\\w+ \\w+|^\\w+'),(data_filter$user_rating$aggregate_rating))%>%arrange(desc(data_filter$user_rating$aggregate_rating))
 
-names(frame3)=c('CUISINES','USER_RATING')
-
-ggplot(data=frame3[1:6,],aes(x=CUISINES,y=USER_RATING))+geom_bar(stat = 'identity',aes(fill=CUISINES))+
-
-scale_fill_brewer(palette = 'Reds')+theme_bw()
-
-```
 
 
 <br>
 <h4><b>DOES HAVING ONLINE_DELIVERY IMPROVE USER_RATING</b></h4>
 ```{r}
-frame4<-data.frame(data_filter$has_online_delivery,as.integer(data_filter$user_rating$aggregate_rating))
-
-
-names(frame4)=c('ONLINE_DELIVERY','USER_RATING')
-
-frame4<-frame4%>%group_by(as.character(ONLINE_DELIVERY))%>%summarise(avg_rating=mean(USER_RATING))
-names(frame4)=c('ONLINE_DELIVERY','USER_RATING')
-
-(frame4)%>%kbl()%>%kable_material_dark(c('striped','hover'))
-```
-
-<br>
-<h4><b>PRICE_RANGE VS USER_RATING</b></h4>
-```{r}
-frame5<-data.frame(data_filter$price_range,as.integer(data_filter$user_rating$aggregate_rating))
-
-names(frame5)=c('PRICE_RANGE','USER_RATING')
-
-frame5<-frame5%>%group_by(as.character(PRICE_RANGE))%>%summarise(avg_rating=mean(USER_RATING))
-names(frame5)=c('PRICE_RANGE','USER_RATING')
-
-(frame5)%>%kbl()%>%kable_material_dark(c('striped','hover'))
+ 
+  
 ```
 
 
 <br>
 <h4><b>WHERE ARE THE HIGHEST RATED RESTAURANTS LOCATED</b></h4>
-```{r}
-frame6<-data.frame(as.numeric(data_filter$location$latitude),as.numeric(data_filter$location$longitude),as.numeric(data_filter$user_rating$aggregate_rating))
-names(frame6)=c('lat','lon','USER_RATING')
-
-
-getColor <- function(frame6) {
-  sapply(frame6$USER_RATING, function(USERRATING) {
-  if(USERRATING > 4) {
-    "green"
-  } else if(USERRATING >=2&USERRATING <=4) {
-    "orange"
-  } else {
-    "red"
-  } })
-}
-
-
-icons <- awesomeIcons(
-  icon = 'glyphicon glyphicon-glass',
-  iconColor = 'black',
-  library = 'glyphicon',
-  markerColor = getColor(frame6)
-)
-
- leaflet(data = frame6) %>%addTiles()%>%addAwesomeMarkers(~lon, ~lat,icon=icons,label = ~USER_RATING)
-```
-
-
-
