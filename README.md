@@ -11,4 +11,4 @@ Mongodb’s cloud database platform ATLAS to store the details of various restau
 
  **The link to the webpage is below:**
 
-https://leandersavio.shinyapps.io/RESTAURANT/ (SAFARI,CHROME,EDGE)
+https://rpubs.com/leander/RESTAURANT-DATA (SAFARI,CHROME,EDGE)
